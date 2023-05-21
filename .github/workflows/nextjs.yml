@@ -63,7 +63,7 @@ jobs:
         #   cache: ${{ steps.detect-package-manager.outputs.manager }}
         uses: pnpm/action-setup@v2
         with:
-          version: "6.0.2"
+          version: 8
       - name: Setup Pages
         uses: actions/configure-pages@v3
         with:
