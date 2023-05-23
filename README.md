@@ -1,5 +1,7 @@
 # life-tile
 
+url: <https://oginom.github.io/life-tile>
+
 ## development
 
 ### creating app
@@ -16,4 +18,4 @@ $ npx create-next-app life-tile --typescript
 ```
 
 - `webpack` と `canvas` の相性が悪いので App Router を off にしている
-  - https://github.com/Automattic/node-canvas/issues/867
+  - <https://github.com/Automattic/node-canvas/issues/867>
