@@ -72,24 +72,49 @@ const colorToHex = (color: number) => {
   }
 }
 
-const TileView: FC<Tile & TransformProps> = ({ color, transform }) => {
+type TileViewProps = {
+  onTouchStart: any
+  onTouchEnter: any
+  onTouchEnd: any
+}
+
+const TileView: FC<Tile & TransformProps & TileViewProps> = ({ color, transform, onTouchStart, onTouchEnter, onTouchEnd }) => {
   const fill = colorToHex(color)
-  return <Rect fill={fill} {...transformProps(transform)} />
+  return <Rect fill={fill} {...transformProps(transform)}
+  onMouseDown={onTouchStart} onMouseEnter={onTouchEnter} onMouseUp={onTouchEnd}
+  onTouchStart={onTouchStart} onTouchMove={onTouchEnter} onTouchEnd={onTouchEnd} />
+}
+
+type Range = {
+  l: number
+  r: number
+  t: number
+  b: number
 }
 
 type Game = {
   turn: number
   tiles: number[][]
+  selecting: Range
 }
 
-const RetryButton: FC<any> = (props) => {
+type GameViewProps = {
+  handleSelectRange: any
+  handleGet: any
+}
+
+const GetButton: FC<TransformProps & {callback: any}> = ({transform, callback}) => {
+  // TODO: pass through touch events
   return <Group>
-    <Rect fill='gray' width={200} height={100} {...props} x={props.x - 100} y={props.y - 50} onClick={props.callback} />
-    <Text text={"RETRY"} {...props} />
+    <Rect strokeWidth={2} stroke='black' fill='white' {...transformProps(transform)} onClick={callback} />
+    <Text text={"GET"} fontStyle="bold" {...transformProps(transform)} align="center" verticalAlign="middle" listening={false}/>
   </Group>
 }
 
-const GameView: FC<Game & TransformProps & {handleRetry: any}> = ({ tiles, handleRetry, transform }) => {
+const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, selecting, turn, transform, handleGet, handleSelectRange }) => {
+
+  // こういうところで recoil の global state を使うべきなんじゃないか
+  const [startTile, setStartTile] = useState<Vec2 | null>(null)
 
   const W = tiles[0].length
   const H = tiles.length
@@ -99,23 +124,57 @@ const GameView: FC<Game & TransformProps & {handleRetry: any}> = ({ tiles, handl
   }
   const tilesView = tiles.map((row, y) => {
     return row.map((color, x) => {
+      const onTouchStart = () => {
+        setStartTile({ x: x, y: y })
+        handleSelectRange({ l: x, r: x, t: y, b: y })
+      }
+      const onTouchEnter = () => {
+        if (startTile != null) {
+          const l = Math.min(x, startTile!.x)
+          const r = Math.max(x, startTile!.x)
+          const t = Math.min(y, startTile!.y)
+          const b = Math.max(y, startTile!.y)
+          handleSelectRange({ l: l, r: r, t: t, b: b }) 
+        }
+      }
+      const onTouchEnd = () => {
+        setStartTile(null)
+      }
       return <TileView key= {`${x}-${y}`} color={color} transform={{
         scale: { x: 1, y: 1 },
         pos: { x: x * tileSize.x, y: y * tileSize.y },
         size: tileSize
-      }} />
+      }} onTouchStart={onTouchStart} onTouchEnter={onTouchEnter} onTouchEnd={onTouchEnd} />
     })
   })
 
+  const selectingRectTransform: RectTransform = {
+    scale: { x: 1, y: 1 },
+    pos: { x: selecting.l * tileSize.x, y: selecting.t * tileSize.y },
+    size: { x: (selecting.r - selecting.l + 1) * tileSize.x, y: (selecting.b - selecting.t + 1) * tileSize.y },
+  }
+
+  const getButtonTransform: RectTransform = {
+    scale: { x: 1, y: 1 },
+    pos: {
+      x: (selecting.l + selecting.r + 1) * tileSize.x / 2 - tileSize.x * 0.25,
+      y: (selecting.t + selecting.b + 1) * tileSize.y / 2 - tileSize.y * 0.15,
+    },
+    size: { x: tileSize.x * 0.5, y: tileSize.y * 0.3 },
+  }
+
   return <Layer>
       {tilesView}
+      <Rect stroke={colorToHex(turn)} strokeWidth={20} {...transformProps(selectingRectTransform)} listening={false}/>
+      <GetButton transform={getButtonTransform} callback={handleGet}/>
       {/* gameOver && <RetryButton x={300} y={300} callback={handleRetry} /> */}
     </Layer>
 }
 
 type GameStage = {
   handleClick: any
-  handleRetry: any
+  handleGet: any
+  handleSelectRange: any
   width: number
   height: number
   windowSize: any
@@ -143,62 +202,34 @@ const transformProps = (rectTransform: RectTransform) => {
   }
 }
 
-const GameStageView: FC<GameStage> = ({ handleClick, handleRetry, windowSize, width, height, game }) => {
+const GameStageView: FC<GameStage> = ({ handleClick, handleGet, handleSelectRange, windowSize, width, height, game }) => {
   const scale = Math.min((windowSize.width) / width, (windowSize.height) / height);
   const gameTransform: RectTransform = {
     scale: { x: 1, y: 1 },
     pos: { x: (windowSize.width - width * scale) / 2, y: (windowSize.height - height * scale) / 2 },
     size: { x: width, y: height },
   }
-  return <Stage width={width * scale} height={height * scale} scaleX={scale} scaleY={scale} className="flex justify-center" onKeyPress={(e: any) => console.log(e)} onClick={() => handleClick()} onTouchStart={() => handleClick()}>
-    <GameView {...game} handleRetry={handleRetry} transform={gameTransform}/>
-    <Layer>
-      <Rect stroke='black' strokeWidth={4} x={2} y={2} width={width-4} height={height-4} />
+  return <Stage width={width * scale} height={height * scale} scaleX={scale} scaleY={scale} className="flex justify-center" onTouchStart={() => handleClick()}>
+    <GameView {...game} handleGet={handleGet} handleSelectRange={handleSelectRange} transform={gameTransform}/>
+    <Layer listening={false}>
+      <Rect stroke='black' strokeWidth={4} x={2} y={2} width={width-4} height={height-4} listening={false}/>
     </Layer>
   </Stage>
 }
 
-//// ループで実行したい処理 を callback関数に渡す
-//const useAnimationFrame = (callback = () => {}) => {
-//  const reqIdRef = useRef(0);
-//  // useCallback で callback 関数が更新された時のみ関数を再生成
-//  const loop = useCallback(() => {
-//    reqIdRef.current = requestAnimationFrame(loop);
-//    callback();
-//  }, [callback]);
-//
-//  useEffect(() => {
-//    reqIdRef.current = requestAnimationFrame(loop);
-//    return () => cancelAnimationFrame(reqIdRef.current);
-//    // loop を依存配列に
-//  }, [loop]);
-//};
-
 const GND = 623
 
 export default function Home() {
-
   const [game, setGame] = useState({
-    //t: 0,
-    //spawner: { prevT: 0 },
-    //player: {
-    //  t: 0,
-    //  pos: {x: 275, y: GND},
-    //  disp_d: {x: 0, y: 0},
-    //  v: {x: 0, y: 0},
-    //  jumping: true,
-    //  fated: false,
-    //},
-    //enemies: Array<Enemy>(),
-    //gameOver: false,
     turn: 1,
     tiles: [
       [0, 0, 0, 0, 0],
-      [0, 1, 1, 1, 1],
-      [2, 2, -1, 0, 0],
-      [2, 2, 0, 0, 0],
-      [2, 2, 0, -1, 0],
+      [0, 0, 0, 0, 0],
+      [0, 0, -1, 0, 0],
+      [0, 0, 0, 0, 0],
+      [0, 0, 0, -1, 0],
     ],
+    selecting: { l: 0, r: 0, t: 0, b: 0 },
   })
 
   const currentKeyboardState: any = useRecoilValue(keyboardState);
@@ -220,7 +251,7 @@ export default function Home() {
       handleResize();
       return () => window.removeEventListener("resize", handleResize);
     }
-  })
+  }, [])
 
   const jump = () => {
     console.log("jump")
@@ -228,10 +259,37 @@ export default function Home() {
 
   const handleClick = () => {
     jump()
+    setGame((prev) => ({
+      ...prev,
+      range: { l: 1, r: 2, t: 0, b: 0 },
+    }))
   }
 
   const handleRetry = () => {
     console.log("handle retry")
+  }
+
+  const handleGet = () => {
+    // TODO: check if the range is valid
+    for (let y = game.selecting.t; y <= game.selecting.b; y++) {
+      for (let x = game.selecting.l; x <= game.selecting.r; x++) {
+        game.tiles[y][x] = game.turn
+      }
+    }
+    setGame((prev) => ({
+      ...prev,
+      tiles: game.tiles,
+      selecting: { l: 0, r: 0, t: 0, b: 0 },
+      turn: game.turn == 1 ? 2 : 1
+    }))
+  }
+
+  const handleSelectRange = (range: Range) => {
+    console.log("handle select range")
+    setGame((prev) => ({
+      ...prev,
+      selecting: range,
+    }))
   }
 
   const W = 600;
@@ -240,7 +298,7 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-between">
       <div className="z-10 w-full h-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <GameStageView handleClick={() => handleClick()} handleRetry={handleRetry} windowSize={windowSize} width={W} height={H} game={game} />
+        <GameStageView handleClick={handleClick} handleGet={handleGet} handleSelectRange={handleSelectRange} windowSize={windowSize} width={W} height={H} game={game} />
       </div>
       <KeyboardEventHandler />
     </main>
