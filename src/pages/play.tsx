@@ -1,49 +1,7 @@
 /* eslint-disable jsx-a11y/alt-text */
 
-import { Layer, Rect, Circle, Ellipse, Line, Stage, Image, Text, Group } from "react-konva";
-import { Inter } from 'next/font/google'
-import { FC, useCallback, useEffect, useRef, useState } from "react";
-import useImage from 'use-image';
-import { atom, useSetRecoilState, useRecoilValue } from 'recoil';
-
-const SHOW_BOUNDING_BOX = false
-
-const keyboardState = atom({
-  key: 'keyboardState',
-  default: {},
-});
-
-function KeyboardEventHandler() {
-  const setKeyboardState = useSetRecoilState(keyboardState);
-
-  useEffect(() => {
-    const handleKeyDown = (event: any) => {
-      setKeyboardState((prev) => ({
-        ...prev,
-        [event.code]: true,
-      }));
-    };
-
-    const handleKeyUp = (event: any) => {
-      setKeyboardState((prev) => ({
-        ...prev,
-        [event.code]: false,
-      }));
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, []);
-
-  return null;
-}
-
-const inter = Inter({ subsets: ['latin'] })
+import { Layer, Rect, Stage, Text, Group } from "react-konva";
+import { FC, useEffect, useState } from "react";
 
 // viewer ?
 
@@ -51,8 +9,6 @@ type Vec2 = {
   x: number
   y: number
 }
-
-type Charactor = "TIGER" | "VELOCI" | "MICRO"
 
 type Tile = {
   color: number
@@ -80,7 +36,7 @@ type TileViewProps = {
 
 const TileView: FC<Tile & TransformProps & TileViewProps> = ({ color, transform, onTouchStart, onTouchEnter, onTouchEnd }) => {
   const fill = colorToHex(color)
-  return <Rect fill={fill} {...transformProps(transform)}
+  return <Rect stroke={"#CCCCCC"} strokeWidth={2} fill={fill} {...transformProps(transform, 2)}
   onMouseDown={onTouchStart} onMouseEnter={onTouchEnter} onMouseUp={onTouchEnd}
   onTouchStart={onTouchStart} onTouchMove={onTouchEnter} onTouchEnd={onTouchEnd} />
 }
@@ -93,10 +49,30 @@ type Range = {
 }
 
 type Game = {
+  players: PlayserState[]
   turn: number
+  loser: number
   tiles: number[][]
   selecting: Range
 }
+
+const initialGame = () => ({
+  players: [
+    { player: 1, score: 0, totalScore: 0 },
+    { player: 2, score: 0, totalScore: 0 },
+  ],
+  turn: 1,
+  loser: -1,
+  tiles: [
+    [0, 0, 0, 0, 0, 0],
+    [0, -1, 0, 0, 0, 0],
+    [0, 0, 0, -1, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, -1, 0, 0, 0],
+  ],
+  selecting: { l: 0, r: 0, t: 0, b: 0 },
+})
 
 type GameViewProps = {
   handleSelectRange: any
@@ -164,7 +140,7 @@ const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, selecting,
     size: { x: tileSize.x * 0.6, y: tileSize.y * 0.4 },
   }
 
-  return <Layer>
+  return <Layer {...transformProps(transform)}>
       {tilesView}
       <Rect stroke={colorToHex(turn)} strokeWidth={20} {...transformProps(selectingRectTransform, 20)} listening={false}/>
       <GetButton transform={getButtonTransform} callback={handleGet} enabled={canGet} listening={startTile == null}/>
@@ -177,8 +153,6 @@ type GameStage = {
   handleGet: any
   canGet: boolean
   handleSelectRange: any
-  width: number
-  height: number
   windowSize: any
   game: Game
 }
@@ -204,35 +178,79 @@ const transformProps = (rectTransform: RectTransform, stroke: number = 0) => {
   }
 }
 
-const GameStageView: FC<GameStage> = ({ handleClick, handleGet, canGet, handleSelectRange, windowSize, width, height, game }) => {
-  const scale = Math.min((windowSize.width) / width, (windowSize.height) / height);
-  const gameTransform: RectTransform = {
+type PlayserState = {
+  player: number
+  totalScore: number
+  score: number
+}
+
+const PlayserStateView: FC<TransformProps & PlayserState & {turn: boolean}> = ({transform, player, score, totalScore, turn}) => {
+
+  const fitTransform: RectTransform = {
     scale: { x: 1, y: 1 },
-    pos: { x: (windowSize.width - width * scale) / 2, y: (windowSize.height - height * scale) / 2 },
+    pos: { x: 0, y: 0 },
+    size: { x: transform.size.x / transform.scale.x, y: transform.size.y / transform.scale.y },
+  }
+
+  const turnTransform: RectTransform = {
+    scale: { x: 1, y: 1 },
+    pos: { x: 0, y: 0 },
+    size: { x: fitTransform.size.x / 2, y: fitTransform.size.y / 2 },
+  }
+
+  return <Layer {...transformProps(transform)}>
+    <Rect strokeWidth={2} stroke='black' fill={colorToHex(player)} {...transformProps(fitTransform, 2)} />
+    <Text text={`${score}`} fontSize={Math.floor(transform.size.y * 0.5)} fontStyle="bold" {...transformProps(fitTransform)} align="center" verticalAlign="middle" listening={false}/>
+    <Text text={`${totalScore}`} fontSize={Math.floor(transform.size.y * 0.2)} fontStyle="bold" {...transformProps(fitTransform)} align="right" verticalAlign="top" listening={false}/>
+    {turn && <Text text={"TURN"} fontSize={Math.floor(transform.size.y * 0.2)} fontStyle="bold" {...transformProps(turnTransform)} align="center" verticalAlign="middle" listening={false}/>}
+  </Layer>
+}
+
+const GameStageView: FC<GameStage> = ({ handleClick, handleGet, canGet, handleSelectRange, windowSize, game }) => {
+  const width = 600;
+  const height = 600;
+
+  const verticalLayout = windowSize.width / 2 < windowSize.height * (3/4)
+
+  var scale: number
+  var gameTransform: RectTransform
+  var playerTransforms: RectTransform[]
+  if (verticalLayout) {
+    scale = Math.min((windowSize.width) / width, (windowSize.height) / (height * (4/3)));
+  } else {
+    scale = Math.min((windowSize.width) / width, (windowSize.height) / height);
+  }
+
+  gameTransform = {
+    scale: { x: 1, y: 1 },
+    pos: { x: (windowSize.width / scale - width) / 2, y: 0 },
     size: { x: width, y: height },
   }
-  return <Stage width={width * scale} height={height * scale} scaleX={scale} scaleY={scale} className="flex justify-center" onTouchStart={() => handleClick()}>
+  playerTransforms = [{
+    scale: { x: 1, y: 1 },
+    pos: { x: (windowSize.width / scale - width) / 2, y: height },
+    size: { x: width / 2, y: height * (1/3) },
+  }, {
+    scale: { x: 1, y: 1 },
+    pos: { x: (windowSize.width / scale) / 2, y: height },
+    size: { x: width / 2, y: height * (1/3) },
+  }]
+
+  const players = game.players.map((player, i) => {
+    return <PlayserStateView transform={playerTransforms[i]} {...player} turn={player.player == game.turn} key={i}/>
+  })
+
+  return <Stage width={windowSize.width} height={windowSize.height} scaleX={scale} scaleY={scale} className="flex justify-center" onTouchStart={() => handleClick()}>
     <GameView {...game} handleGet={handleGet} canGet={canGet} handleSelectRange={handleSelectRange} transform={gameTransform}/>
+    {players}
     <Layer listening={false}>
-      <Rect stroke='black' strokeWidth={4} x={2} y={2} width={width-4} height={height-4} listening={false}/>
+      <Rect stroke='black' strokeWidth={4} {...transformProps(gameTransform, 4)} listening={false}/>
     </Layer>
   </Stage>
 }
 
 export default function Home() {
-  const [game, setGame] = useState({
-    turn: 1,
-    tiles: [
-      [0, 0, 0, 0, 0],
-      [0, 0, 0, 0, 0],
-      [0, 0, -1, 0, 0],
-      [0, 0, 0, 0, 0],
-      [0, 0, 0, -1, 0],
-    ],
-    selecting: { l: 0, r: 0, t: 0, b: 0 },
-  })
-
-  const currentKeyboardState: any = useRecoilValue(keyboardState);
+  const [game, setGame] = useState<Game>(initialGame())
 
   const [windowSize, setWindowSize] = useState({
     width: 0,
@@ -261,24 +279,68 @@ export default function Home() {
 
   const handleClick = () => {
     jump()
-    setGame((prev) => ({
-      ...prev,
-      range: { l: 1, r: 2, t: 0, b: 0 },
-    }))
+    if (game.loser != -1) {
+      setGame((prev) => ({...initialGame(), 
+        players: prev.players,
+      } as Game))
+      setCanGet(true)
+    }
+  }
+
+  const selectingArea = (range: Range) => {
+    return (range.r - range.l + 1) * (range.b - range.t + 1)
   }
 
   const handleGet = () => {
-    // TODO: check if the range is valid
+    // TODO?: check if the range is valid
     for (let y = game.selecting.t; y <= game.selecting.b; y++) {
       for (let x = game.selecting.l; x <= game.selecting.r; x++) {
         game.tiles[y][x] = game.turn
       }
     }
+
+    var newPlayers = game.players.map((player) => {
+      if (player.player == game.turn) {
+        return {
+          ...player,
+          score: player.score + selectingArea(game.selecting),
+          totalScore: player.totalScore,
+        }
+      } else {
+        return player
+      }
+    })
+
+    if (game.tiles.every((row) => row.every((tile) => tile != 0))) {
+      // finish the game
+      game.loser = game.turn
+      game.turn = -1
+      newPlayers = newPlayers.map((player) => {
+        if (player.player == game.loser) {
+          return {
+            ...player,
+            score: 0,
+          }
+        } else {
+          return {
+            ...player,
+            totalScore: player.totalScore + player.score,
+            score: 0,
+          }
+        }
+      })
+    } else {
+      // continue the game
+      game.turn = game.turn % game.players.length + 1
+    }
+
     setGame((prev) => ({
       ...prev,
-      tiles: game.tiles,
+      players: newPlayers,
+      loser: game.loser,
+      tiles: game.tiles.concat(),
       selecting: { l: 0, r: 0, t: 0, b: 0 },
-      turn: game.turn == 1 ? 2 : 1
+      turn: game.turn,
     }))
     setCanGet(game.tiles[0][0] == 0)
   }
@@ -300,15 +362,11 @@ export default function Home() {
     setCanGet(canGet)
   }
 
-  const W = 600;
-  const H = 600;
-
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between">
-      <div className="z-10 w-full h-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <GameStageView handleClick={handleClick} handleGet={handleGet} canGet={canGet} handleSelectRange={handleSelectRange} windowSize={windowSize} width={W} height={H} game={game} />
+    <main className="">
+      <div className="">
+        <GameStageView handleClick={handleClick} handleGet={handleGet} canGet={canGet} handleSelectRange={handleSelectRange} windowSize={windowSize} game={game} />
       </div>
-      <KeyboardEventHandler />
     </main>
   )
 }
