@@ -85,7 +85,7 @@ type GameViewProps = {
 const GetButton: FC<TransformProps & {callback: any, enabled: boolean, listening: boolean}> = ({transform, callback, enabled, listening}) => {
   // TODO: pass through touch events
   return <Group>
-    <Rect strokeWidth={2} stroke='black' fill={enabled ? 'white' : 'gray'} {...transformProps(transform)} onClick={() => enabled && callback()} onTouchStart={() => enabled && callback()} listening={listening}/>
+    <Rect strokeWidth={2} stroke='black' fill={enabled ? 'white' : 'gray'} {...transformProps(transform)} onClick={() => enabled && callback()} onTouchEnd={() => enabled && callback()} listening={listening}/>
     <Text text={"GET"} fontStyle="bold" {...transformProps(transform)} align="center" verticalAlign="middle" listening={false}/>
   </Group>
 }
