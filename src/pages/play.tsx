@@ -101,17 +101,18 @@ type Game = {
 type GameViewProps = {
   handleSelectRange: any
   handleGet: any
+  canGet: boolean
 }
 
-const GetButton: FC<TransformProps & {callback: any}> = ({transform, callback}) => {
+const GetButton: FC<TransformProps & {callback: any, enabled: boolean, listening: boolean}> = ({transform, callback, enabled, listening}) => {
   // TODO: pass through touch events
   return <Group>
-    <Rect strokeWidth={2} stroke='black' fill='white' {...transformProps(transform)} onClick={callback} />
+    <Rect strokeWidth={2} stroke='black' fill={enabled ? 'white' : 'gray'} {...transformProps(transform)} onClick={() => enabled && callback()} onTouchStart={() => enabled && callback()} listening={listening}/>
     <Text text={"GET"} fontStyle="bold" {...transformProps(transform)} align="center" verticalAlign="middle" listening={false}/>
   </Group>
 }
 
-const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, selecting, turn, transform, handleGet, handleSelectRange }) => {
+const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, selecting, turn, transform, handleGet, canGet, handleSelectRange }) => {
 
   // こういうところで recoil の global state を使うべきなんじゃないか
   const [startTile, setStartTile] = useState<Vec2 | null>(null)
@@ -157,16 +158,16 @@ const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, selecting,
   const getButtonTransform: RectTransform = {
     scale: { x: 1, y: 1 },
     pos: {
-      x: (selecting.l + selecting.r + 1) * tileSize.x / 2 - tileSize.x * 0.25,
-      y: (selecting.t + selecting.b + 1) * tileSize.y / 2 - tileSize.y * 0.15,
+      x: (selecting.l + selecting.r + 1) * tileSize.x / 2 - tileSize.x * 0.3,
+      y: (selecting.t + selecting.b + 1) * tileSize.y / 2 - tileSize.y * 0.2,
     },
-    size: { x: tileSize.x * 0.5, y: tileSize.y * 0.3 },
+    size: { x: tileSize.x * 0.6, y: tileSize.y * 0.4 },
   }
 
   return <Layer>
       {tilesView}
-      <Rect stroke={colorToHex(turn)} strokeWidth={20} {...transformProps(selectingRectTransform)} listening={false}/>
-      <GetButton transform={getButtonTransform} callback={handleGet}/>
+      <Rect stroke={colorToHex(turn)} strokeWidth={20} {...transformProps(selectingRectTransform, 20)} listening={false}/>
+      <GetButton transform={getButtonTransform} callback={handleGet} enabled={canGet} listening={startTile == null}/>
       {/* gameOver && <RetryButton x={300} y={300} callback={handleRetry} /> */}
     </Layer>
 }
@@ -174,6 +175,7 @@ const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, selecting,
 type GameStage = {
   handleClick: any
   handleGet: any
+  canGet: boolean
   handleSelectRange: any
   width: number
   height: number
@@ -191,18 +193,18 @@ type TransformProps = {
   transform: RectTransform
 }
 
-const transformProps = (rectTransform: RectTransform) => {
+const transformProps = (rectTransform: RectTransform, stroke: number = 0) => {
   return {
     scaleX: rectTransform.scale.x,
     scaleY: rectTransform.scale.y,
-    x: rectTransform.pos.x,
-    y: rectTransform.pos.y,
-    width: rectTransform.size.x * rectTransform.scale.x,
-    height: rectTransform.size.y * rectTransform.scale.y,
+    x: rectTransform.pos.x + stroke / 2,
+    y: rectTransform.pos.y + stroke / 2,
+    width: rectTransform.size.x * rectTransform.scale.x - stroke,
+    height: rectTransform.size.y * rectTransform.scale.y - stroke,
   }
 }
 
-const GameStageView: FC<GameStage> = ({ handleClick, handleGet, handleSelectRange, windowSize, width, height, game }) => {
+const GameStageView: FC<GameStage> = ({ handleClick, handleGet, canGet, handleSelectRange, windowSize, width, height, game }) => {
   const scale = Math.min((windowSize.width) / width, (windowSize.height) / height);
   const gameTransform: RectTransform = {
     scale: { x: 1, y: 1 },
@@ -210,14 +212,12 @@ const GameStageView: FC<GameStage> = ({ handleClick, handleGet, handleSelectRang
     size: { x: width, y: height },
   }
   return <Stage width={width * scale} height={height * scale} scaleX={scale} scaleY={scale} className="flex justify-center" onTouchStart={() => handleClick()}>
-    <GameView {...game} handleGet={handleGet} handleSelectRange={handleSelectRange} transform={gameTransform}/>
+    <GameView {...game} handleGet={handleGet} canGet={canGet} handleSelectRange={handleSelectRange} transform={gameTransform}/>
     <Layer listening={false}>
       <Rect stroke='black' strokeWidth={4} x={2} y={2} width={width-4} height={height-4} listening={false}/>
     </Layer>
   </Stage>
 }
-
-const GND = 623
 
 export default function Home() {
   const [game, setGame] = useState({
@@ -253,6 +253,8 @@ export default function Home() {
     }
   }, [])
 
+  const [canGet, setCanGet] = useState(true)
+
   const jump = () => {
     console.log("jump")
   }
@@ -263,10 +265,6 @@ export default function Home() {
       ...prev,
       range: { l: 1, r: 2, t: 0, b: 0 },
     }))
-  }
-
-  const handleRetry = () => {
-    console.log("handle retry")
   }
 
   const handleGet = () => {
@@ -282,6 +280,7 @@ export default function Home() {
       selecting: { l: 0, r: 0, t: 0, b: 0 },
       turn: game.turn == 1 ? 2 : 1
     }))
+    setCanGet(game.tiles[0][0] == 0)
   }
 
   const handleSelectRange = (range: Range) => {
@@ -290,6 +289,15 @@ export default function Home() {
       ...prev,
       selecting: range,
     }))
+    var canGet = true
+    for (let y = range.t; y <= range.b; y++) {
+      for (let x = range.l; x <= range.r; x++) {
+        if (game.tiles[y][x] != 0) {
+          canGet = false
+        }
+      }
+    }
+    setCanGet(canGet)
   }
 
   const W = 600;
@@ -298,7 +306,7 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-between">
       <div className="z-10 w-full h-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <GameStageView handleClick={handleClick} handleGet={handleGet} handleSelectRange={handleSelectRange} windowSize={windowSize} width={W} height={H} game={game} />
+        <GameStageView handleClick={handleClick} handleGet={handleGet} canGet={canGet} handleSelectRange={handleSelectRange} windowSize={windowSize} width={W} height={H} game={game} />
       </div>
       <KeyboardEventHandler />
     </main>
