@@ -50,29 +50,31 @@ type Range = {
 
 type Game = {
   players: PlayserState[]
+  firstPlayer: number
   turn: number
   loser: number
   tiles: number[][]
   selecting: Range
 }
 
-const initialGame = () => ({
-  players: [
-    { player: 1, score: 0, totalScore: 0 },
-    { player: 2, score: 0, totalScore: 0 },
-  ],
-  turn: 1,
-  loser: -1,
-  tiles: [
-    [0, 0, 0, 0, 0, 0],
-    [0, -1, 0, 0, 0, 0],
-    [0, 0, 0, -1, 0, 0],
-    [0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0],
-    [0, 0, -1, 0, 0, 0],
-  ],
-  selecting: { l: 0, r: 0, t: 0, b: 0 },
-})
+const initialGame = () => {
+  const tiles = [...Array(6)].map(() => [...Array(6)].map(() => 0))
+  tiles[Math.floor(Math.random() * 6)][Math.floor(Math.random() * 6)] = -1
+  tiles[Math.floor(Math.random() * 6)][Math.floor(Math.random() * 6)] = -1
+  tiles[Math.floor(Math.random() * 6)][Math.floor(Math.random() * 6)] = -1
+
+  return {
+    players: [
+      { player: 1, score: 0, totalScore: 0 },
+      { player: 2, score: 0, totalScore: 0 },
+    ],
+    firstPlayer: 1,
+    turn: 1,
+    loser: -1,
+    tiles: tiles,
+    selecting: { l: 0, r: 0, t: 0, b: 0 },
+  }
+}
 
 type GameViewProps = {
   handleSelectRange: any
@@ -245,6 +247,7 @@ const GameStageView: FC<GameStage> = ({ handleClick, handleGet, canGet, handleSe
     {players}
     <Layer listening={false}>
       <Rect stroke='black' strokeWidth={4} {...transformProps(gameTransform, 4)} listening={false}/>
+      <Text text='LIFE TILE' fontSize={Math.floor(gameTransform.size.y * 0.03)} fontStyle="bold" {...transformProps(gameTransform)} align="right" verticalAlign="bottom" listening={false}/>
     </Layer>
   </Stage>
 }
@@ -281,6 +284,8 @@ export default function Home() {
     jump()
     if (game.loser != -1) {
       setGame((prev) => ({...initialGame(), 
+        firstPlayer: prev.firstPlayer % prev.players.length + 1,
+        turn: prev.firstPlayer % prev.players.length + 1,
         players: prev.players,
       } as Game))
       setCanGet(true)
