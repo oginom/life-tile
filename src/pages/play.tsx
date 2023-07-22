@@ -35,8 +35,8 @@ type TileViewProps = {
 }
 
 const TileView: FC<Tile & TransformProps & TileViewProps> = ({ color, transform, onTouchStart, onTouchEnter, onTouchEnd }) => {
-  const fill = colorToHex(color)
-  return <Rect stroke={"#CCCCCC"} strokeWidth={2} fill={fill} {...transformProps(transform, 2)}
+  const fill = colorToHex(color > 0 ? 0 : color)
+  return <Rect stroke={"#CCCCCC"} strokeWidth={6} fill={fill} {...transformProps(transform, 6)}
   onMouseDown={onTouchStart} onMouseEnter={onTouchEnter} onMouseUp={onTouchEnd}
   onTouchStart={onTouchStart} onTouchMove={onTouchEnter} onTouchEnd={onTouchEnd} />
 }
@@ -48,13 +48,19 @@ type Range = {
   b: number
 }
 
+type Selection = {
+  player: number
+  range: Range
+}
+
 type Game = {
   players: PlayserState[]
   firstPlayer: number
   turn: number
   loser: number
   tiles: number[][]
-  selecting: Range
+  history: Selection[]
+  selecting: Range | null
 }
 
 const initialGame = () => {
@@ -73,6 +79,7 @@ const initialGame = () => {
     loser: -1,
     tiles: tiles,
     selecting: { l: 0, r: 0, t: 0, b: 0 },
+    history: [],
   }
 }
 
@@ -90,7 +97,7 @@ const GetButton: FC<TransformProps & {callback: any, enabled: boolean, listening
   </Group>
 }
 
-const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, selecting, turn, transform, handleGet, canGet, handleSelectRange }) => {
+const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, history, selecting, turn, transform, handleGet, canGet, handleSelectRange }) => {
 
   // こういうところで recoil の global state を使うべきなんじゃないか
   const [startTile, setStartTile] = useState<Vec2 | null>(null)
@@ -127,25 +134,39 @@ const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, selecting,
     })
   })
 
-  const selectingRectTransform: RectTransform = {
+  const selectionViews = history.map((selection, i) => {
+    const range = selection.range
+    const color = selection.player
+    return <Rect key={i} fill={colorToHex(color)} strokeWidth={0} {...transformProps({
+      scale: { x: 1, y: 1 },
+      pos: { x: range.l * tileSize.x, y: range.t * tileSize.y },
+      size: { x: (range.r - range.l + 1) * tileSize.x, y: (range.b - range.t + 1) * tileSize.y },
+    }, 10)} listening={false}/>
+  })
+
+  const selectingRectTransform: RectTransform | null = selecting ? {
     scale: { x: 1, y: 1 },
     pos: { x: selecting.l * tileSize.x, y: selecting.t * tileSize.y },
     size: { x: (selecting.r - selecting.l + 1) * tileSize.x, y: (selecting.b - selecting.t + 1) * tileSize.y },
-  }
+  } : null
 
-  const getButtonTransform: RectTransform = {
+  const getButtonTransform: RectTransform | null = selecting ? {
     scale: { x: 1, y: 1 },
     pos: {
       x: (selecting.l + selecting.r + 1) * tileSize.x / 2 - tileSize.x * 0.3,
       y: (selecting.t + selecting.b + 1) * tileSize.y / 2 - tileSize.y * 0.2,
     },
     size: { x: tileSize.x * 0.6, y: tileSize.y * 0.4 },
-  }
+  } : null
 
   return <Layer {...transformProps(transform)}>
       {tilesView}
-      <Rect stroke={colorToHex(turn)} strokeWidth={20} {...transformProps(selectingRectTransform, 20)} listening={false}/>
-      <GetButton transform={getButtonTransform} callback={handleGet} enabled={canGet} listening={startTile == null}/>
+      {selectionViews}
+      { selecting && selectingRectTransform && getButtonTransform && <Group>
+          <Rect stroke={colorToHex(turn)} strokeWidth={10} {...transformProps(selectingRectTransform, 20)} listening={false}/>
+          <GetButton transform={getButtonTransform} callback={handleGet} enabled={canGet} listening={startTile == null}/>
+        </Group>
+      }
       {/* gameOver && <RetryButton x={300} y={300} callback={handleRetry} /> */}
     </Layer>
 }
@@ -297,6 +318,10 @@ export default function Home() {
   }
 
   const handleGet = () => {
+    if (game.selecting == null) {
+      return
+    }
+
     // TODO?: check if the range is valid
     for (let y = game.selecting.t; y <= game.selecting.b; y++) {
       for (let x = game.selecting.l; x <= game.selecting.r; x++) {
@@ -304,11 +329,16 @@ export default function Home() {
       }
     }
 
+    const newHistory = game.history.concat({
+      player: game.turn,
+      range: game.selecting,
+    })
+
     var newPlayers = game.players.map((player) => {
       if (player.player == game.turn) {
         return {
           ...player,
-          score: player.score + selectingArea(game.selecting),
+          score: player.score + selectingArea(game.selecting!),
           totalScore: player.totalScore,
         }
       } else {
@@ -320,6 +350,7 @@ export default function Home() {
       // finish the game
       game.loser = game.turn
       game.turn = -1
+      game.selecting = null
       newPlayers = newPlayers.map((player) => {
         if (player.player == game.loser) {
           return {
@@ -337,6 +368,7 @@ export default function Home() {
     } else {
       // continue the game
       game.turn = game.turn % game.players.length + 1
+      game.selecting = { l: 0, r: 0, t: 0, b: 0 }
     }
 
     setGame((prev) => ({
@@ -344,7 +376,8 @@ export default function Home() {
       players: newPlayers,
       loser: game.loser,
       tiles: game.tiles.concat(),
-      selecting: { l: 0, r: 0, t: 0, b: 0 },
+      history: newHistory,
+      selecting: game.selecting,
       turn: game.turn,
     }))
     setCanGet(game.tiles[0][0] == 0)
@@ -352,6 +385,9 @@ export default function Home() {
 
   const handleSelectRange = (range: Range) => {
     console.log("handle select range")
+    if (game.turn < 0) {
+      return
+    }
     setGame((prev) => ({
       ...prev,
       selecting: range,
