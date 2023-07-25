@@ -112,7 +112,7 @@ const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, history, s
     return row.map((color, x) => {
       const onTouchStart = () => {
         setStartTile({ x: x, y: y })
-        handleSelectRange({ l: x, r: x, t: y, b: y })
+        handleSelectRange({ l: x, r: x, t: y, b: y }, false)
       }
       const onTouchEnter = () => {
         if (startTile != null) {
@@ -120,10 +120,17 @@ const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, history, s
           const r = Math.max(x, startTile!.x)
           const t = Math.min(y, startTile!.y)
           const b = Math.max(y, startTile!.y)
-          handleSelectRange({ l: l, r: r, t: t, b: b }) 
+          handleSelectRange({ l: l, r: r, t: t, b: b }, false) 
         }
       }
       const onTouchEnd = () => {
+        if (startTile != null) {
+          const l = Math.min(x, startTile!.x)
+          const r = Math.max(x, startTile!.x)
+          const t = Math.min(y, startTile!.y)
+          const b = Math.max(y, startTile!.y)
+          handleSelectRange({ l: l, r: r, t: t, b: b }, true) 
+        }
         setStartTile(null)
       }
       return <TileView key= {`${x}-${y}`} color={color} transform={{
@@ -383,15 +390,11 @@ export default function Home() {
     setCanGet(game.tiles[0][0] == 0)
   }
 
-  const handleSelectRange = (range: Range) => {
+  const handleSelectRange = (range: Range, final: boolean) => {
     console.log("handle select range")
     if (game.turn < 0) {
       return
     }
-    setGame((prev) => ({
-      ...prev,
-      selecting: range,
-    }))
     var canGet = true
     for (let y = range.t; y <= range.b; y++) {
       for (let x = range.l; x <= range.r; x++) {
@@ -400,6 +403,10 @@ export default function Home() {
         }
       }
     }
+    setGame((prev) => ({
+      ...prev,
+      selecting: (canGet || !final) ? range : null,
+    }))
     setCanGet(canGet)
   }
 
