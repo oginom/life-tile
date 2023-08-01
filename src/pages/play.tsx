@@ -1,7 +1,8 @@
 /* eslint-disable jsx-a11y/alt-text */
 
-import { Layer, Rect, Stage, Text, Group } from "react-konva";
-import { FC, useEffect, useState } from "react";
+import { Image, Layer, Rect, Stage, Text, Group } from "react-konva";
+import { FC, useCallback, useEffect, useRef, useState } from "react";
+import useImage from 'use-image';
 
 // viewer ?
 
@@ -51,6 +52,7 @@ type Range = {
 type Selection = {
   player: number
   range: Range
+  thinkTime: number
 }
 
 type Game = {
@@ -97,10 +99,12 @@ const GetButton: FC<TransformProps & {callback: any, enabled: boolean, listening
   </Group>
 }
 
-const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, history, selecting, turn, transform, handleGet, canGet, handleSelectRange }) => {
+const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, history, selecting, turn, loser, transform, handleGet, canGet, handleSelectRange }) => {
 
   // こういうところで recoil の global state を使うべきなんじゃないか
   const [startTile, setStartTile] = useState<Vec2 | null>(null)
+
+  const [skullImage] = useImage('skull.svg')
 
   const W = tiles[0].length
   const H = tiles.length
@@ -142,13 +146,42 @@ const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, history, s
   })
 
   const selectionViews = history.map((selection, i) => {
+    const selectionIndexStr = (i + 1).toString()
     const range = selection.range
     const color = selection.player
-    return <Rect key={i} fill={colorToHex(color)} strokeWidth={0} {...transformProps({
-      scale: { x: 1, y: 1 },
-      pos: { x: range.l * tileSize.x, y: range.t * tileSize.y },
-      size: { x: (range.r - range.l + 1) * tileSize.x, y: (range.b - range.t + 1) * tileSize.y },
-    }, 10)} listening={false}/>
+    const thinkTimeInt = Math.floor(selection.thinkTime / 1000)
+    const thinkTimeStr = `${Math.floor(thinkTimeInt / 60)}:${("0" + (thinkTimeInt % 60)).slice(-2)}`
+
+    const transform = rangeTransform(range, tileSize)
+    const transform2 = rangeTransform({
+      ...range,
+      r: range.r + 1,
+    }, tileSize)
+    const transform4 = rangeTransform({
+      ...range,
+      l: range.l - 1,
+    }, tileSize)
+    const transform3 = rangeTransform({
+      l: range.r + 1,
+      r: range.r + 2,
+      t: range.b + 1,
+      b: range.b + 2,
+    }, tileSize)
+
+    const rectTransformProps = transformProps(transform, 10)
+    const point = (selection.range.r - selection.range.l + 1) * (selection.range.b - selection.range.t + 1)
+    const isSkull = (selection.player == loser)
+    const pointStr  = point.toString()
+
+    return <Group key={i} clipX={rectTransformProps.x} clipY={rectTransformProps.y} clipWidth={rectTransformProps.width} clipHeight={rectTransformProps.height}>
+      <Rect fill={colorToHex(color)} strokeWidth={0} {...rectTransformProps} listening={false}/>
+      <Text text={thinkTimeStr} fill="white" fontSize={Math.floor(tileSize.y * 0.5)} fontStyle="bold" {...transformProps(transform2)} rotation={45} align="left" verticalAlign="top" listening={false}/>
+      <Text text={selectionIndexStr} fill="white" fontSize={Math.floor(tileSize.y)} fontStyle="bold" {...transformProps(transform3, 20)} offsetX={tileSize.x} offsetY={tileSize.y} rotation={-45} align="center" verticalAlign="top" listening={false}/>
+      <Text text="LIFE" fill="white" fontSize={tileSize.y * 0.5} fontStyle="bold" {...transformProps(transform2, 0)} rotation={-5} align="left" verticalAlign="bottom" listening={false}/>
+      <Text text="TILE" fill="white" fontSize={tileSize.y * 0.5} fontStyle="bold" {...transformProps(transform4, 0)} rotation={5} align="right" verticalAlign="top" listening={false}/>
+      {!isSkull && <Text text={pointStr} fill="white" fontSize={tileSize.y * 1.5} fontStyle="bold" {...transformProps(transform, -30)} align="center" verticalAlign="middle" listening={false}/>}
+      {isSkull && <Image image={skullImage} {...transformProps(transform)}/>}
+    </Group>
   })
 
   const selectingRectTransform: RectTransform | null = selecting ? {
@@ -208,6 +241,14 @@ const transformProps = (rectTransform: RectTransform, stroke: number = 0) => {
   }
 }
 
+const rangeTransform = (range: Range, tileSize: Vec2) => {
+  return {
+    scale: { x: 1, y: 1 },
+    pos: { x: range.l * tileSize.x, y: range.t * tileSize.y },
+    size: { x: (range.r - range.l + 1) * tileSize.x, y: (range.b - range.t + 1) * tileSize.y },
+  }
+}
+
 type PlayserState = {
   player: number
   totalScore: number
@@ -230,9 +271,9 @@ const PlayserStateView: FC<TransformProps & PlayserState & {turn: boolean}> = ({
 
   return <Layer {...transformProps(transform)}>
     <Rect strokeWidth={2} stroke='black' fill={colorToHex(player)} {...transformProps(fitTransform, 2)} />
-    <Text text={`${score}`} fontSize={Math.floor(transform.size.y * 0.5)} fontStyle="bold" {...transformProps(fitTransform)} align="center" verticalAlign="middle" listening={false}/>
-    <Text text={`${totalScore}`} fontSize={Math.floor(transform.size.y * 0.2)} fontStyle="bold" {...transformProps(fitTransform)} align="right" verticalAlign="top" listening={false}/>
-    {turn && <Text text={"TURN"} fontSize={Math.floor(transform.size.y * 0.2)} fontStyle="bold" {...transformProps(turnTransform)} align="center" verticalAlign="middle" listening={false}/>}
+    <Text text={`${score}`} fontSize={Math.floor(transform.size.y * 0.5)} fontStyle="bold" fill="white" {...transformProps(fitTransform)} align="center" verticalAlign="middle" listening={false}/>
+    <Text text={`${totalScore}`} fontSize={Math.floor(transform.size.y * 0.2)} fontStyle="bold" fill="white" {...transformProps(fitTransform)} align="right" verticalAlign="top" listening={false}/>
+    {turn && <Text text={"TURN"} fontSize={Math.floor(transform.size.y * 0.2)} fontStyle="bold" fill="white" {...transformProps(fitTransform, 30)} align="left" verticalAlign="top" listening={false}/>}
   </Layer>
 }
 
@@ -280,8 +321,26 @@ const GameStageView: FC<GameStage> = ({ handleClick, handleGet, canGet, handleSe
   </Stage>
 }
 
+// ループで実行したい処理 を callback関数に渡す
+const useAnimationFrame = (callback = (ts: number) => {}) => {
+  const reqIdRef = useRef(0);
+  // useCallback で callback 関数が更新された時のみ関数を再生成
+  const loop = useCallback((ts: number) => {
+    reqIdRef.current = requestAnimationFrame(loop);
+    callback(ts);
+  }, [callback]);
+
+  useEffect(() => {
+    reqIdRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(reqIdRef.current);
+    // loop を依存配列に
+  }, [loop]);
+};
+
 export default function Home() {
   const [game, setGame] = useState<Game>(initialGame())
+  const [ts, setTS] = useState(0)
+  const [tsPrev, setTSPrev] = useState(0)
 
   const [windowSize, setWindowSize] = useState({
     width: 0,
@@ -307,6 +366,10 @@ export default function Home() {
   const jump = () => {
     console.log("jump")
   }
+
+  useAnimationFrame((_ts) => {
+    setTS(_ts);
+  });
 
   const handleClick = () => {
     jump()
@@ -339,7 +402,9 @@ export default function Home() {
     const newHistory = game.history.concat({
       player: game.turn,
       range: game.selecting,
+      thinkTime: ts - tsPrev,
     })
+    setTSPrev(ts)
 
     var newPlayers = game.players.map((player) => {
       if (player.player == game.turn) {
@@ -375,7 +440,7 @@ export default function Home() {
     } else {
       // continue the game
       game.turn = game.turn % game.players.length + 1
-      game.selecting = { l: 0, r: 0, t: 0, b: 0 }
+      game.selecting = null
     }
 
     setGame((prev) => ({
