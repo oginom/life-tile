@@ -335,7 +335,7 @@ const GameStageView: FC<GameStage> = ({ handleClick, handleGet, canGet, handleSe
     return <PlayserStateView transform={playerTransforms[i]} {...player} turn={player.player == game.turn} key={i}/>
   })
 
-  return <Stage width={windowSize.width} height={windowSize.height} scaleX={scale} scaleY={scale} className="flex justify-center" onTouchStart={() => handleClick()}>
+  return <Stage width={windowSize.width} height={windowSize.height} scaleX={scale} scaleY={scale} className="flex justify-center" onTouchEnd={handleClick} onMouseUp={handleClick}>
     <GameView {...game} handleGet={handleGet} canGet={canGet} handleSelectRange={handleSelectRange} transform={gameTransform}/>
     {false && players}
     <Layer listening={false}>
@@ -391,13 +391,20 @@ export default function Home() {
   //  setTS(_ts);
   //});
 
+  const [restart, setRestart] = useState(false)
+
   const handleClick = () => {
     if (game.loser != -1) {
+      if (!restart) {
+        setRestart(true)
+        return
+      }
       setGame((prev) => ({...initialGame(), 
         firstPlayer: prev.firstPlayer % prev.players.length + 1,
         turn: prev.firstPlayer % prev.players.length + 1,
         players: prev.players,
       } as Game))
+      setRestart(false)
     }
   }
 
@@ -496,7 +503,7 @@ export default function Home() {
   }
 
   return (
-    <main className="">
+    <main className="bg-white">
       <div className="">
         <GameStageView handleClick={handleClick} handleGet={handleGet} canGet={canGet} handleSelectRange={handleSelectRange} windowSize={windowSize} game={game} />
       </div>
