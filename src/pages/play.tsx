@@ -3,6 +3,12 @@
 import { Image, Layer, Rect, Stage, Text, Group } from "react-konva";
 import { FC, useCallback, useEffect, useRef, useState } from "react";
 import useImage from 'use-image';
+//import { atom, useRecoilState, useRecoilValue } from "recoil";
+
+//const timeState = atom({
+//  key: 'time',
+//  default: 0
+//});
 
 // viewer ?
 
@@ -36,10 +42,16 @@ type TileViewProps = {
 }
 
 const TileView: FC<Tile & TransformProps & TileViewProps> = ({ color, transform, onTouchStart, onTouchEnter, onTouchEnd }) => {
-  const fill = colorToHex(color > 0 ? 0 : color)
+  const fill = colorToHex(color)
+  const onTouchEndPc = () => {
+    onTouchEnd(false)
+  }
+  const onTouchEndSp = () => {
+    onTouchEnd(true)
+  }
   return <Rect stroke={"#CCCCCC"} strokeWidth={6} fill={fill} {...transformProps(transform, 6)}
-  onMouseDown={onTouchStart} onMouseEnter={onTouchEnter} onMouseUp={onTouchEnd}
-  onTouchStart={onTouchStart} onTouchMove={onTouchEnter} onTouchEnd={onTouchEnd} />
+  onMouseDown={onTouchStart} onMouseEnter={onTouchEnter} onMouseUp={onTouchEndPc}
+  onTouchStart={onTouchStart} onTouchMove={onTouchEnter} onTouchEnd={onTouchEndSp} />
 }
 
 type Range = {
@@ -80,7 +92,7 @@ const initialGame = () => {
     turn: 1,
     loser: -1,
     tiles: tiles,
-    selecting: { l: 0, r: 0, t: 0, b: 0 },
+    selecting: null,
     history: [],
   }
 }
@@ -92,10 +104,20 @@ type GameViewProps = {
 }
 
 const GetButton: FC<TransformProps & {callback: any, enabled: boolean, listening: boolean}> = ({transform, callback, enabled, listening}) => {
+
+  //const t = useRecoilValue(timeState);
+
+  //const dy = Math.abs(Math.sin(t * 0.004)) * -0;
+  const dy = 0;
+
+  const transform3 = {...transform, pos: {...transform.pos, y: transform.pos.y + 3}};
+  const transform2 = {...transform, pos: {...transform.pos, y: transform.pos.y + dy}};
+
   // TODO: pass through touch events
   return <Group>
-    <Rect strokeWidth={2} stroke='black' fill={enabled ? 'white' : 'gray'} {...transformProps(transform)} onClick={() => enabled && callback()} onTouchEnd={() => enabled && callback()} listening={listening}/>
-    <Text text={"GET"} fontStyle="bold" {...transformProps(transform)} align="center" verticalAlign="middle" listening={false}/>
+    <Rect fill={'rgba(1,1,1,0.25)'} {...transformProps(transform3)} listening={false}/>
+    <Rect strokeWidth={2} stroke='black' fill={enabled ? 'white' : 'gray'} {...transformProps(transform2)} onClick={() => enabled && callback()} onTouchEnd={() => enabled && callback()} listening={listening}/>
+    <Text text={"GET"} fontStyle="bold" {...transformProps(transform2)} align="center" verticalAlign="middle" listening={false}/>
   </Group>
 }
 
@@ -127,13 +149,15 @@ const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, history, s
           handleSelectRange({ l: l, r: r, t: t, b: b }, false) 
         }
       }
-      const onTouchEnd = () => {
+      const onTouchEnd = (decide: boolean) => {
         if (startTile != null) {
           const l = Math.min(x, startTile!.x)
           const r = Math.max(x, startTile!.x)
           const t = Math.min(y, startTile!.y)
           const b = Math.max(y, startTile!.y)
-          handleSelectRange({ l: l, r: r, t: t, b: b }, true) 
+          if (handleSelectRange({ l: l, r: r, t: t, b: b }, true) && decide) {
+            handleGet()
+          }
         }
         setStartTile(null)
       }
@@ -174,12 +198,12 @@ const GameView: FC<Game & TransformProps & GameViewProps> = ({ tiles, history, s
     const pointStr  = point.toString()
 
     return <Group key={i} clipX={rectTransformProps.x} clipY={rectTransformProps.y} clipWidth={rectTransformProps.width} clipHeight={rectTransformProps.height}>
-      <Rect fill={colorToHex(color)} strokeWidth={0} {...rectTransformProps} listening={false}/>
-      <Text text={thinkTimeStr} fill="white" fontSize={Math.floor(tileSize.y * 0.5)} fontStyle="bold" {...transformProps(transform2)} rotation={45} align="left" verticalAlign="top" listening={false}/>
-      <Text text={selectionIndexStr} fill="white" fontSize={Math.floor(tileSize.y)} fontStyle="bold" {...transformProps(transform3, 20)} offsetX={tileSize.x} offsetY={tileSize.y} rotation={-45} align="center" verticalAlign="top" listening={false}/>
-      <Text text="LIFE" fill="white" fontSize={tileSize.y * 0.5} fontStyle="bold" {...transformProps(transform2, 0)} rotation={-5} align="left" verticalAlign="bottom" listening={false}/>
-      <Text text="TILE" fill="white" fontSize={tileSize.y * 0.5} fontStyle="bold" {...transformProps(transform4, 0)} rotation={5} align="right" verticalAlign="top" listening={false}/>
-      {!isSkull && <Text text={pointStr} fill="white" fontSize={tileSize.y * 1.5} fontStyle="bold" {...transformProps(transform, -30)} align="center" verticalAlign="middle" listening={false}/>}
+      {true && <Rect fill={colorToHex(color)} strokeWidth={0} {...rectTransformProps} listening={false}/>}
+      {false && <Text text={thinkTimeStr} fill="white" fontSize={Math.floor(tileSize.y * 0.5)} fontStyle="bold" {...transformProps(transform2)} rotation={45} align="left" verticalAlign="top" listening={false}/>}
+      {true && <Text text={selectionIndexStr} fill="white" fontSize={Math.floor(tileSize.y)} fontStyle="bold" {...transformProps(transform3, 20)} offsetX={tileSize.x} offsetY={tileSize.y} rotation={-45} align="center" verticalAlign="top" listening={false}/>}
+      {false && <Text text="LIFE" fill="white" fontSize={tileSize.y * 0.5} fontStyle="bold" {...transformProps(transform2, 0)} rotation={-5} align="left" verticalAlign="bottom" listening={false}/>}
+      {false && <Text text="TILE" fill="white" fontSize={tileSize.y * 0.5} fontStyle="bold" {...transformProps(transform4, 0)} rotation={5} align="right" verticalAlign="top" listening={false}/>}
+      {false && !isSkull && <Text text={pointStr} fill="white" fontSize={tileSize.y * 1.5} fontStyle="bold" {...transformProps(transform, -30)} align="center" verticalAlign="middle" listening={false}/>}
       {isSkull && <Image image={skullImage} {...transformProps(transform)}/>}
     </Group>
   })
@@ -313,10 +337,10 @@ const GameStageView: FC<GameStage> = ({ handleClick, handleGet, canGet, handleSe
 
   return <Stage width={windowSize.width} height={windowSize.height} scaleX={scale} scaleY={scale} className="flex justify-center" onTouchStart={() => handleClick()}>
     <GameView {...game} handleGet={handleGet} canGet={canGet} handleSelectRange={handleSelectRange} transform={gameTransform}/>
-    {players}
+    {false && players}
     <Layer listening={false}>
       <Rect stroke='black' strokeWidth={4} {...transformProps(gameTransform, 4)} listening={false}/>
-      <Text text='LIFE TILE' fontSize={Math.floor(gameTransform.size.y * 0.03)} fontStyle="bold" {...transformProps(gameTransform)} align="right" verticalAlign="bottom" listening={false}/>
+      <Text text='LIFE TILE' fill='white' fontSize={Math.floor(gameTransform.size.y * 0.03)} fontStyle="bold" {...transformProps(gameTransform, 4)} align="right" verticalAlign="bottom" listening={false}/>
     </Layer>
   </Stage>
 }
@@ -339,8 +363,8 @@ const useAnimationFrame = (callback = (ts: number) => {}) => {
 
 export default function Home() {
   const [game, setGame] = useState<Game>(initialGame())
-  const [ts, setTS] = useState(0)
-  const [tsPrev, setTSPrev] = useState(0)
+  //const [ts, setTS] = useRecoilState(timeState)
+  //const [tsPrev, setTSPrev] = useState(0)
 
   const [windowSize, setWindowSize] = useState({
     width: 0,
@@ -363,23 +387,17 @@ export default function Home() {
 
   const [canGet, setCanGet] = useState(true)
 
-  const jump = () => {
-    console.log("jump")
-  }
-
-  useAnimationFrame((_ts) => {
-    setTS(_ts);
-  });
+  //useAnimationFrame((_ts) => {
+  //  setTS(_ts);
+  //});
 
   const handleClick = () => {
-    jump()
     if (game.loser != -1) {
       setGame((prev) => ({...initialGame(), 
         firstPlayer: prev.firstPlayer % prev.players.length + 1,
         turn: prev.firstPlayer % prev.players.length + 1,
         players: prev.players,
       } as Game))
-      setCanGet(true)
     }
   }
 
@@ -402,9 +420,10 @@ export default function Home() {
     const newHistory = game.history.concat({
       player: game.turn,
       range: game.selecting,
-      thinkTime: ts - tsPrev,
+      //thinkTime: ts - tsPrev,
+      thinkTime: 0,
     })
-    setTSPrev(ts)
+    //setTSPrev(ts)
 
     var newPlayers = game.players.map((player) => {
       if (player.player == game.turn) {
@@ -458,7 +477,7 @@ export default function Home() {
   const handleSelectRange = (range: Range, final: boolean) => {
     console.log("handle select range")
     if (game.turn < 0) {
-      return
+      return false
     }
     var canGet = true
     for (let y = range.t; y <= range.b; y++) {
@@ -473,6 +492,7 @@ export default function Home() {
       selecting: (canGet || !final) ? range : null,
     }))
     setCanGet(canGet)
+    return canGet
   }
 
   return (
