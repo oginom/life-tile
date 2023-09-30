@@ -1,5 +1,7 @@
 # life-tile
 
+![](public/rule1.png)
+
 url: <https://oginom.github.io/life-tile>
 
 ## development
