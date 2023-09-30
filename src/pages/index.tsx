@@ -11,7 +11,7 @@ const inter = Inter({ subsets: ['latin'] })
 export default function Home() {
   return (
     <main
-      className={`flex min-h-screen flex-col items-center p-24 bg-white ${inter.className}`}
+      className={`flex min-h-screen flex-col items-center p-24 bg-white dark:bg-black ${inter.className}`}
     >
       <h1 className={`mb-2 text-4xl font-semibold`}>
         LIFE TILE

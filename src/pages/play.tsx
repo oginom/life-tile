@@ -503,7 +503,7 @@ export default function Home() {
   }
 
   return (
-    <main className="bg-white">
+    <main className="bg-white dark:bg-black">
       <div className="">
         <GameStageView handleClick={handleClick} handleGet={handleGet} canGet={canGet} handleSelectRange={handleSelectRange} windowSize={windowSize} game={game} />
       </div>
