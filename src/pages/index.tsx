@@ -16,7 +16,7 @@ export default function Home() {
       <h1 className={`mb-2 text-4xl font-semibold`}>
         LIFE TILE
       </h1>
-      <div className="mb-2 grid text-center lg:mb-0 lg:grid-cols-4 lg:text-left">
+      <div className="mb-2 grid text-center">
         <Link href="/play" className={"bg-transparent hover:bg-blue-500 text-blue-700 font-semibold hover:text-white py-2 px-4 border border-blue-500 hover:border-transparent rounded"}>
           Play
         </Link>
